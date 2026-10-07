@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: task-manager-config
+data:
+  POSTGRES_DB: task_manager
+  POSTGRES_USER: task_manager
+  JWT_ISSUER: task-manager
+  JWT_AUDIENCE: task-manager-web
+  JWT_LIFETIME_MINUTES: "60"
+...

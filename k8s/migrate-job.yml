@@ -1,0 +1,62 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+      - image: task-manager-api:5e37ca7
+        imagePullPolicy: IfNotPresent
+        name: migrate
+        args: ["migrate"]
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: task-manager-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: task-manager-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: task-manager-secrets
+              key: POSTGRES_PASSWORD
+        - name: ConnectionStrings__Default
+          value: Host=db;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)
+        - name: Jwt__Secret
+          valueFrom:
+            secretKeyRef:
+              name: task-manager-secrets
+              key: JWT_SECRET
+        - name: Jwt__Issuer
+          valueFrom:
+            configMapKeyRef:
+              name: task-manager-config
+              key: JWT_ISSUER
+        - name: Jwt__Audience
+          valueFrom:
+            configMapKeyRef:
+              name: task-manager-config
+              key: JWT_AUDIENCE
+        - name: Logging__Console__FormatterName
+          value: json
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+...

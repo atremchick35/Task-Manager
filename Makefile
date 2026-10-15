@@ -6,6 +6,10 @@ IMAGE_TAG ?= $(GIT_SHA)
 
 BACKEND := backend
 FRONTEND := frontend
+VLOGS_IMAGE := victoriametrics/victoria-logs:v1.53.0
+VLOGS_MANIFEST := k8s/observability/victoria-logs.yml
+VECTOR_IMAGE := timberio/vector:0.59.0-alpine
+VECTOR_MANIFEST := k8s/observability/vector.yml
 SOLUTION := $(BACKEND)/TaskManager.sln
 API_PROJECT := $(BACKEND)/src/TaskManager.Api
 INFRA_PROJECT := $(BACKEND)/src/TaskManager.Infrastructure
@@ -32,7 +36,8 @@ frontend-dev: export API_PROXY_TARGET = http://localhost:$(API_PORT)
     tools migration-add migration-remove migration-list migration-script db-update db-rollback purge-tokens-local \
     backend-restore backend-build backend-run backend-test \
     frontend-install frontend-dev frontend-build frontend-typecheck \
-    test
+    test \
+    vlogs-image vlogs-up vlogs-status vlogs-ui vlogs-delete \n    vector-image vector-up vector-logs vector-delete
 
 help:
 	@echo "Environment"
@@ -67,6 +72,19 @@ help:
 	@echo "  frontend-dev        run Vite dev server with /api proxy"
 	@echo "  frontend-build      build the frontend bundle"
 	@echo "  test                run all checks"
+	@echo ""
+	@echo "VictoriaLogs (minikube, namespace observability)"
+	@echo "  vlogs-image         pull the VictoriaLogs image and load it into minikube"
+	@echo "  vlogs-up            deploy VictoriaLogs and wait until it is ready"
+	@echo "  vlogs-status        show VictoriaLogs pod, service and volume"
+	@echo "  vlogs-ui            port-forward VictoriaLogs to http://localhost:9428/select/vmui/"
+	@echo "  vlogs-delete        remove VictoriaLogs with its namespace and stored logs"
+	@echo ""
+	@echo "Log shipping (Vector DaemonSet: pods in namespace default -> VictoriaLogs)"
+	@echo "  vector-image        pull the Vector image and load it into minikube"
+	@echo "  vector-up           deploy or update Vector and restart it to pick up the config"
+	@echo "  vector-logs         follow Vector logs"
+	@echo "  vector-delete       remove Vector"
 
 env:
 	@test -f .env && echo ".env already exists" || (cp .env.example .env && echo ".env created")
@@ -155,3 +173,35 @@ frontend-typecheck:
 	cd $(FRONTEND) && npm run typecheck
 
 test: backend-test frontend-typecheck
+
+vlogs-image:
+	docker pull $(VLOGS_IMAGE)
+	minikube image load $(VLOGS_IMAGE)
+
+vlogs-up:
+	kubectl apply -f $(VLOGS_MANIFEST)
+	kubectl -n observability rollout status statefulset/victoria-logs --timeout=180s
+
+vlogs-status:
+	kubectl -n observability get pods,svc,pvc
+
+vlogs-ui:
+	kubectl -n observability port-forward svc/victoria-logs 9428:9428
+
+vlogs-delete:
+	kubectl delete -f $(VLOGS_MANIFEST) --ignore-not-found
+
+vector-image:
+	docker pull $(VECTOR_IMAGE)
+	minikube image load $(VECTOR_IMAGE)
+
+vector-up:
+	kubectl apply -f $(VECTOR_MANIFEST)
+	kubectl -n observability rollout restart daemonset/vector
+	kubectl -n observability rollout status daemonset/vector --timeout=180s
+
+vector-logs:
+	kubectl -n observability logs -f daemonset/vector
+
+vector-delete:
+	kubectl delete -f $(VECTOR_MANIFEST) --ignore-not-found

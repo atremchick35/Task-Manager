@@ -28,7 +28,7 @@ public sealed class AuthController(IAuthService authService, IUserQueryProvider 
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
-        await authService.LogoutAsync(User.GetTokenId(), User.GetTokenExpiration(), cancellationToken);
+        await authService.LogoutAsync(User.GetUserId(), User.GetTokenId(), User.GetTokenExpiration(), cancellationToken);
         return NoContent();
     }
 

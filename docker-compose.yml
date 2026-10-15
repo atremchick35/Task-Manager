@@ -4,6 +4,8 @@ x-api: &api
   image: task-manager-api:${IMAGE_TAG:-latest}
   build:
     context: ./backend
+    args:
+      APP_VERSION: ${IMAGE_TAG:-latest}
   environment:
     ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
@@ -11,7 +13,6 @@ x-api: &api
     Jwt__Audience: ${JWT_AUDIENCE:-task-manager-web}
     Jwt__LifetimeMinutes: ${JWT_LIFETIME_MINUTES:-60}
     ASPNETCORE_HTTP_PORTS: 8080
-    Logging__Console__FormatterName: json
 
 services:
   db:

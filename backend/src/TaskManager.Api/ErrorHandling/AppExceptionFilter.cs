@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Serilog;
 using TaskManager.Application.Common;
 using TaskManager.Domain.Common;
 
 namespace TaskManager.Api.ErrorHandling;
 
-internal sealed class AppExceptionFilter(ProblemDetailsFactory problemDetailsFactory) : IExceptionFilter
+internal sealed class AppExceptionFilter(ProblemDetailsFactory problemDetailsFactory, IDiagnosticContext diagnosticContext) : IExceptionFilter
 {
     public void OnException(ExceptionContext context)
     {
@@ -21,6 +22,9 @@ internal sealed class AppExceptionFilter(ProblemDetailsFactory problemDetailsFac
 
         if (status == 0)
             return;
+
+        diagnosticContext.Set("ErrorType", context.Exception.GetType().Name);
+        diagnosticContext.Set("ErrorMessage", context.Exception.Message);
 
         var problem = problemDetailsFactory.CreateProblemDetails(context.HttpContext, status, title, detail: context.Exception.Message);
         context.Result = new ObjectResult(problem) { StatusCode = status };

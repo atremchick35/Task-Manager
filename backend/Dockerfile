@@ -12,9 +12,11 @@ COPY src/ src/
 RUN dotnet publish src/TaskManager.Api/TaskManager.Api.csproj -c Release -o /app --no-restore /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+ARG APP_VERSION=dev
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080 \
-    DOTNET_RUNNING_IN_CONTAINER=true
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    Service__Version=$APP_VERSION
 COPY --from=build /app .
 USER app
 EXPOSE 8080

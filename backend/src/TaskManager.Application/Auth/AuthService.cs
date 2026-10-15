@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TaskManager.Application.Abstractions;
 using TaskManager.Application.Common;
 using TaskManager.Application.Users;
@@ -12,7 +13,8 @@ internal sealed class AuthService(
     IPasswordHasher passwordHasher,
     IAccessTokenIssuer tokenIssuer,
     ITokenRevocationStore revocationStore,
-    TimeProvider timeProvider) : IAuthService
+    TimeProvider timeProvider,
+    ILogger<AuthService> logger) : IAuthService
 {
     public const int PasswordMinLength = 8;
     public const int PasswordMaxLength = 128;
@@ -21,17 +23,24 @@ internal sealed class AuthService(
     {
         var password = request.Password ?? string.Empty;
         if (password.Length is < PasswordMinLength or > PasswordMaxLength)
+        {
+            logger.RegistrationRejected(AuthLog.InvalidPasswordLength);
             throw new ValidationException(
                 $"Password must be between {PasswordMinLength} and {PasswordMaxLength} characters.");
+        }
 
         var email = User.NormalizeEmail(request.Email);
         if (await users.EmailExistsAsync(email, cancellationToken))
+        {
+            logger.RegistrationRejected(AuthLog.EmailTaken);
             throw new ConflictException("User with this email already exists.");
+        }
 
         var user = User.Register(request.Name, email, passwordHasher.Hash(password), timeProvider.GetUtcNow());
         users.Add(user);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        logger.UserRegistered(user.Id);
         return CreateResponse(user);
     }
 
@@ -44,18 +53,32 @@ internal sealed class AuthService(
         }
         catch (DomainException)
         {
+            logger.LoginFailed(null, AuthLog.InvalidEmail);
             throw InvalidCredentials();
         }
 
         var user = await users.GetByEmailAsync(email, cancellationToken);
-        if (user is null || !passwordHasher.Verify(request.Password ?? string.Empty, user.PasswordHash))
+        if (user is null)
+        {
+            logger.LoginFailed(null, AuthLog.UnknownEmail);
             throw InvalidCredentials();
+        }
 
+        if (!passwordHasher.Verify(request.Password ?? string.Empty, user.PasswordHash))
+        {
+            logger.LoginFailed(user.Id, AuthLog.WrongPassword);
+            throw InvalidCredentials();
+        }
+
+        logger.LoginSucceeded(user.Id);
         return CreateResponse(user);
     }
 
-    public Task LogoutAsync(string tokenId, DateTimeOffset expiresAt, CancellationToken cancellationToken) =>
-        revocationStore.RevokeAsync(tokenId, expiresAt, cancellationToken);
+    public async Task LogoutAsync(Guid userId, string tokenId, DateTimeOffset expiresAt, CancellationToken cancellationToken)
+    {
+        await revocationStore.RevokeAsync(tokenId, expiresAt, cancellationToken);
+        logger.LoggedOut(userId);
+    }
 
     private AuthResponse CreateResponse(User user)
     {

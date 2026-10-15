@@ -9,5 +9,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Expressions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TaskManager.Tests" />
   </ItemGroup>
 </Project>

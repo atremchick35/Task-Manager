@@ -1,0 +1,175 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: observability
+...
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "nodes"]
+  verbs: ["get", "list", "watch"]
+...
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector
+subjects:
+- kind: ServiceAccount
+  name: vector
+  namespace: observability
+...
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector
+  namespace: observability
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+
+    sources:
+      app_pods:
+        type: kubernetes_logs
+        extra_field_selector: metadata.namespace=default
+        glob_minimum_cooldown_ms: 5000
+
+    transforms:
+      app_logs:
+        type: remap
+        inputs: [app_pods]
+        source: |
+          parsed, err = parse_json(.message)
+          if err == null && is_object(parsed) {
+            . = merge(., object!(parsed))
+          }
+          if !exists(."service.name") {
+            ."service.name" = .kubernetes.container_name
+          }
+          .kubernetes.app = .kubernetes.pod_labels.app
+          del(.kubernetes.pod_labels)
+          del(.kubernetes.pod_annotations)
+          del(.kubernetes.namespace_labels)
+          del(.kubernetes.node_labels)
+          del(.kubernetes.pod_uid)
+          del(.kubernetes.pod_ip)
+          del(.kubernetes.pod_ips)
+          del(.kubernetes.container_id)
+          del(.kubernetes.container_image_id)
+          del(.file)
+          del(.source_type)
+
+    sinks:
+      victoria_logs:
+        type: http
+        inputs: [app_logs]
+        uri: http://victoria-logs.observability.svc.cluster.local:9428/insert/jsonline?_msg_field=message&_time_field=timestamp&_stream_fields=kubernetes.pod_namespace,kubernetes.container_name,service.name
+        encoding:
+          codec: json
+        framing:
+          method: newline_delimited
+        compression: gzip
+        batch:
+          timeout_secs: 1
+        healthcheck:
+          enabled: false
+...
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: vector
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: vector
+    spec:
+      serviceAccountName: vector
+      containers:
+      - image: timberio/vector:0.59.0-alpine
+        imagePullPolicy: IfNotPresent
+        name: vector
+        args: ["--config", "/etc/vector/vector.yaml"]
+        env:
+        - name: VECTOR_SELF_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - name: api
+          containerPort: 8686
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: api
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vector
+          readOnly: true
+        - name: data
+          mountPath: /var/lib/vector
+        - name: var-log
+          mountPath: /var/log
+          readOnly: true
+        - name: docker-containers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: vector
+      - name: data
+        hostPath:
+          path: /var/lib/vector
+          type: DirectoryOrCreate
+      - name: var-log
+        hostPath:
+          path: /var/log
+      - name: docker-containers
+        hostPath:
+          path: /var/lib/docker/containers
+...

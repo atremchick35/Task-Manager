@@ -13,7 +13,7 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-      - image: task-manager-api:5e37ca7
+      - image: task-manager-api:8cc15f7-dirty
         imagePullPolicy: IfNotPresent
         name: migrate
         args: ["migrate"]
@@ -50,8 +50,6 @@ spec:
             configMapKeyRef:
               name: task-manager-config
               key: JWT_AUDIENCE
-        - name: Logging__Console__FormatterName
-          value: json
         resources:
           requests:
             cpu: 100m

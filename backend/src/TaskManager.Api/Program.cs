@@ -3,12 +3,15 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using TaskManager.Api;
 using TaskManager.Api.Auth;
 using TaskManager.Api.ErrorHandling;
+using TaskManager.Api.Logging;
 using TaskManager.Application;
 using TaskManager.Infrastructure;
 using TaskManager.Infrastructure.Persistence;
 
 var command = AdminCommands.IsAdminCommand(args) ? args[0] : null;
 var builder = WebApplication.CreateBuilder(command is null ? args : args[1..]);
+
+builder.AddStructuredLogging();
 
 builder.Services
     .AddApplication()
@@ -27,6 +30,7 @@ var app = builder.Build();
 if (command is not null)
     return await AdminCommands.RunAsync(app, command);
 
+app.UseStructuredRequestLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseAuthentication();

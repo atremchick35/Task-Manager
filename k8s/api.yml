@@ -32,7 +32,7 @@ spec:
         app: api
     spec:
       containers:
-      - image: task-manager-api:5e37ca7
+      - image: task-manager-api:8cc15f7-dirty
         imagePullPolicy: IfNotPresent
         name: api
         env:
@@ -75,8 +75,6 @@ spec:
               key: JWT_LIFETIME_MINUTES
         - name: ASPNETCORE_HTTP_PORTS
           value: "8080"
-        - name: Logging__Console__FormatterName
-          value: json
         ports:
         - containerPort: 8080
         readinessProbe:

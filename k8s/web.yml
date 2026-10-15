@@ -33,7 +33,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: task-manager-web:5e37ca7
+      - image: task-manager-web:8cc15f7-dirty
         imagePullPolicy: IfNotPresent
         name: web
         env:
